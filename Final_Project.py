@@ -14,6 +14,7 @@ from pyglet.window import key
 import pyglet
 import random
 from pygame import mixer
+from pyglet.image import Animation, ImageGrid, load
 
 class Actor(cocos.sprite.Sprite):
     def __init__(self, image, x, y):
@@ -38,16 +39,16 @@ class Astronaut(cocos.sprite.Sprite):
     KEYS_PRESSED = defaultdict(int)
 
     def __init__(self, image, x, y, collision_handler):
-        super(Astronaut, self).__init__(image, position=(x, y), scale=0.05, rotation=0)
+        super(Astronaut, self).__init__(image, position=(x, y), scale=0.5, rotation=0)
         self.speed = eu.Vector2(0,0)
         #self.speed2 = eu.Vector2(0, 200)
         self.gravity = 0.75
         self.fps = 100
         self.cshape = cm.AARectShape(self.position,
-                                     self.width * 0.5,
-                                     self.height * 0.5)
+                                     self.width * 0.5, self.height*0.5)  #png 각 사진 사이에 빈 공간 너무 많아서 직접 픽셀 사진에서 편집헤서 얼만지 계산 후 대입한 값
         self.collide_map = collision_handler
         self.schedule(self.update)
+        
         
         
     def update(self, elapsed):
@@ -70,6 +71,7 @@ class Astronaut(cocos.sprite.Sprite):
         dx = vel_x * elapsed
         dy = vel_y * elapsed
 
+        
         last = self.get_rect()
         last.center = self.position
 
@@ -135,10 +137,8 @@ class Bullet(cocos.sprite.Sprite):
         self.schedule(self.update)
         if start_position[0] < 450:
             self.new_x = x
-            print("NOR")
         elif start_position[0] >= 450 and start_position[0] <= 2750:
             self.new_x = start_position[0] - 450 + x
-            print("ABNOR")
         else:
             self.new_x = start_position[0] -(900-(3200-start_position[0])) + x
 
@@ -179,6 +179,7 @@ class GameLayer(cocos.layer.ScrollableLayer):
         self.score = 0
         self.level = 1
         self.lives = 3
+        
         self.create_player()
         self.create_alien()
         self.update_score()
@@ -212,7 +213,7 @@ class GameLayer(cocos.layer.ScrollableLayer):
         Astronaut.KEYS_PRESSED[k] = 0
 
     def on_mouse_press(self, x, y, buttons, mod):
-        self.bullet = Bullet('image/blue_bullet.png', x, y, self.player.position)
+        self.bullet = Bullet(self.bullet_img, x, y, self.player.position)
         self.add(self.bullet)
         self.is_bullet = 1
         print("PLAYER: ", self.player.position)
@@ -232,7 +233,12 @@ class GameLayer(cocos.layer.ScrollableLayer):
         mapcollider = mapcolliders.TmxObjectMapCollider()
         mapcollider.on_bump_handler = mapcollider.on_bump_bounce
         collision_handler = mapcolliders.make_collision_handler(mapcollider, self.colliders)
-        self.player = Astronaut('astronaut.png', 960*0.5, 100, collision_handler)
+
+        animation_image = pyglet.image.load('image/character_idle.png')
+        image_grid = pyglet.image.ImageGrid(animation_image, 1, 21, item_width=126, item_height=180)
+        anim = pyglet.image.Animation.from_image_sequence(image_grid[0:], 0.1, loop=True)
+        
+        self.player = Astronaut(anim, 960*0.5, 100, collision_handler)
         self.add(self.player)
         self.hud.update_lives(self.lives)
 
