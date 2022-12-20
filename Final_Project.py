@@ -6,7 +6,7 @@ import cocos.collision_model as cm
 import cocos.euclid as eu
 from cocos import mapcolliders
 import sys
-import pygame
+#import pygame
 from pygame.locals import *
 import cocos.tiles
 from collections import defaultdict
@@ -31,6 +31,7 @@ class MainMenu(Menu):
         m2 = MenuItem('How To Play', self.show_tutorial)
         m3 = MenuItem('Quit', pyglet.app.exit)
         self.create_menu([m1, m2, m3], shake(), shake_back())
+        self.keys = defaultdict(int)
 
     def start_game(self):
         main_scene.add(scroller, z = 0)
@@ -38,11 +39,19 @@ class MainMenu(Menu):
         main_scene.remove(menu)
 
     def show_tutorial(self):
-        pic = image.load('image/Objects/tutorial.png')
-        print(pic.width)
-        print("ff")
+        self.pic = cocos.sprite.Sprite('image/Objects/tutorial.png', position=(450,320), scale=0.8)
+        main_scene.add(self.pic)
+
+    def on_key_press(self, k, _):
+        main_scene.remove(self.pic)
+
+    def on_mouse_motion(self, x, y, dx, dy):
+        return super().on_mouse_motion(x, y, dx, dy)
 
 class Restart(Menu):
+    RESTARTED = False
+    level_2 = None
+    level_3 = None
     def __init__(self, win):
         if win == 0:
             self.a = 'Game Over'
@@ -59,9 +68,15 @@ class Restart(Menu):
         self.create_menu([m1, m2], shake(), shake_back())
 
     def start_game(self):
-        level_1 = GameLayer(hud_layer, 900, 640, 1, 480, 150, 0)
+        Restart.RESTARTED = True
+        HUD.SCORE = 0
+        HUD.LEVEL = 1
+        level_1 = GameLayer(hud_layer, 900, 640, 1)
+        Restart.level_2 = GameLayer(hud_layer, 900, 640, 2)
+        Restart.level_3 = GameLayer(hud_layer, 900, 640, 3)
         scroller.add(level_1)
         main_scene.remove(self)
+        BGM.play(-1)
 
 class Astronaut(cocos.sprite.Sprite):
     KEYS_PRESSED = defaultdict(int)
@@ -70,9 +85,7 @@ class Astronaut(cocos.sprite.Sprite):
     def __init__(self, idle, run_L, run_R, jump_L, jump_R, x, y, collision_handler, level):
         super(Astronaut, self).__init__(idle, position=(x, y), scale=0.35, rotation=0) 
         self.speed = eu.Vector2(0,0)
-        #self.speed2 = eu.Vector2(0, 200)
         self.gravity = 0.75
-        self.fps = 100
         self.cshape = cm.AARectShape(self.position,
                                      self.width * 0.5, self.height*0.5)  #png 각 사진 사이에 빈 공간 너무 많아서 직접 픽셀 사진에서 편집헤서 얼만지 계산 후 대입한 값
         self.collide_map = collision_handler
@@ -99,35 +112,21 @@ class Astronaut(cocos.sprite.Sprite):
         
     def update(self, elapsed):
         pressed = Astronaut.KEYS_PRESSED
-        space_pressed = pressed[key.SPACE] == 1
-        left = 0; right = 0
-        '''if pressed[key.LEFT]:
-            self.rotation = -30
-        if pressed[key.RIGHT]:
-            self.rotation = 30
-        if pressed[key.RIGHT] != 1 and pressed[key.LEFT] != 1:
-            self.rotation = 0'''
-
         
-        vel_x = (pressed[key.RIGHT] - pressed[key.LEFT]) * 300
+        vel_x = (pressed[key.D] - pressed[key.A]) * 300
+
+        if self.speed[1] == 250:
+            self.jump_count = 0
 
         if self.level == 1:
             vel_y = 50    
-            if pressed[key.UP] or pressed[key.DOWN]:
-                vel_y = (pressed[key.UP] - pressed[key.DOWN]) * 300
+            if pressed[key.W] or pressed[key.S]:
+                vel_y = (pressed[key.W] - pressed[key.S]) * 300
         else:
-            vel_y = 50    
-            if pressed[key.UP] or pressed[key.DOWN]:
-                vel_y = (pressed[key.UP] - pressed[key.DOWN]) * 300
-            '''vel_y = -250
-            if pressed[key.LEFT] or pressed[key.RIGHT]:
-                self.jump_count = 0
-            if pressed[key.DOWN]:
-                vel_y = (pressed[key.UP] - pressed[key.DOWN]) * 300
-            if pressed[key.UP] and Astronaut.JUMP == True:
-                vel_y = 1500
-                Astronaut.JUMP = False
-                self.jump_count += 1'''
+            vel_y = -250
+            if pressed[key.W] and self.jump_count < 2 and Astronaut.JUMP == True:
+                vel_y = 500
+                self.jump_count += 1
 
         
         
@@ -144,6 +143,7 @@ class Astronaut(cocos.sprite.Sprite):
         new.y += dy
         
         self.speed = self.collide_map(last, new, vel_x, vel_y)
+        print("SP", self.speed)
         #print(new.center)
         self.position = new.center
         self.cshape.center = new.center
@@ -192,7 +192,7 @@ class Coin(cocos.sprite.Sprite):
 
 class Key(cocos.sprite.Sprite):
     def __init__(self, key_list):
-        super(Key, self).__init__(image='image/Objects/key.png', position=(key_list[0], key_list[1]), scale=0.03)
+        super(Key, self).__init__(image='image/Objects/hud_keyYellow.png', position=(key_list[0], key_list[1]), scale=0.8)
         self.cshape = cm.AARectShape(self.position,
                                      self.width * 0.5,
                                      self.height * 0.5)
@@ -205,7 +205,7 @@ class Door(cocos.sprite.Sprite):
                                      self.height * 0.5)
 
 class Bullet(cocos.sprite.Sprite):
-    BULLET_LIST = ['image/Objects/blue_bullet.png', 'image/Objects/red_bullet.png', 'image/Objects/purple_bullet.png']
+    BULLET_LIST = ['image/Objects/purple_bullet.png', 'image/Objects/red_bullet.png', 'image/Objects/green_bullet.png']
     BULLET_INDEX = 0
     def __init__(self, x, y, start_position):
         super(Bullet, self).__init__(image=Bullet.BULLET_LIST[Bullet.BULLET_INDEX])
@@ -227,29 +227,34 @@ class Bullet(cocos.sprite.Sprite):
         self.cshape.center = self.position
 
     def move(self, y):
-        print(self.new_x, y)
         self.do(ac.MoveTo((self.new_x, y), 1) + ac.CallFunc(self.kill))
 
 class Alien_Shoot(cocos.sprite.Sprite):
-    def __init__(self, position):
+    def __init__(self, position, direction):
         super(Alien_Shoot, self).__init__(image='image/Objects/white_bullet.png', position=position)
         self.cshape = cm.AARectShape(self.position,
                                      self.width * 0.5,
                                      self.height * 0.5)
-        self.speed = eu.Vector2(400, 0)
+        self.new_x = self.position[0] + direction
+        self.exit = False
+        self.schedule(self.update)
+        self.move()
 
     def update(self, elapsed):
-        self.move(self.speed * elapsed)
+        self.cshape.center = self.position
+        print(self.cshape.center)
 
-
-    def move(self, offset):
-        self.position += offset
-        self.cshape.center += offset        
+    def move(self):
+        self.do(ac.MoveTo((self.new_x, self.position[1]), 1.5) + ac.CallFunc(self.kill))
+    
+    def on_exit(self):
+        super(Alien_Shoot, self).on_exit()
+        self.exit = True
 
 class GameLayer(cocos.layer.ScrollableLayer):
     is_event_handler = True
 
-    def __init__(self, hud, w, h, level, pos_x, pos_y, score):
+    def __init__(self, hud, w, h, level):
         super(GameLayer, self).__init__()
         w, h = cocos.director.director.get_window_size()
         self.hud = hud
@@ -261,6 +266,7 @@ class GameLayer(cocos.layer.ScrollableLayer):
         self.key_sound = mixer.Sound('sound/key.wav')
         self.alien_hit_sound = mixer.Sound('sound/hit.mp3')
         self.GameOver_sound = mixer.Sound('sound/game_over.wav')
+        self.GameClear_sound = mixer.Sound('sound/game_clear.wav')
         self.next_level_sound = mixer.Sound('sound/next_level.wav')
         self.shoot_sound = mixer.Sound('sound/shoot.wav')
         self.alien_shoot_sound = mixer.Sound('sound/alien_shoot.wav')
@@ -272,37 +278,39 @@ class GameLayer(cocos.layer.ScrollableLayer):
         self.coin_group = []
         self.bullet_list = []
         self.alien_shoot_list = []
-        self.score = score
+        #self.score = score
         self.lives = 3
         self.keyN = 0
         self.direction = 0 #jump left, right 판별
         self.create_door()
-        self.create_player(pos_x, pos_y)
+        self.create_player()
         self.create_alien()
         self.create_key()
         self.update_score()
         self.update_level()
         self.update_key(self.keyN)
         self.schedule(self.update)
-        #pyglet.clock.schedule_interval(self.shoot(), 0.5)
+        
 
-    def shoot(self):
+    def alien_shoot(self):
         if len(self.alien_group) > 3:
             for i in range(3):
-                self.alien_shoot_list.append(Alien_Shoot(self.alien_group[i].position))
+                if self.alien_group[i].position[0] < self.player.position[0]:
+                    direction = 200
+                else:
+                    direction = -200
+                self.alien_shoot_list.append(Alien_Shoot(self.alien_group[i].position, direction))
                 self.add(self.alien_shoot_list[i])
-                
-            
 
     def update_score(self, score=0):
-        self.score += score
-        self.hud.update_score(self.score)
+        HUD.SCORE += score
+        self.hud.update_score()
 
     def update_key(self, key):
-        self.hud.update_key(self.keyN)
+        self.hud.update_key(key)
 
     def update_level(self):
-        self.hud.update_level(self.level)
+        self.hud.update_level()
     
     def create_door(self):
         if self.level == 1:
@@ -320,23 +328,11 @@ class GameLayer(cocos.layer.ScrollableLayer):
             self.unschedule(self.update)
             BGM.stop()
             self.GameOver_sound.play()
-            scroller.remove(self)
+            #scroller.remove(self)
+            self.kill()
             main_scene.add(restart_menu_lose)
         else:
-            self.create_player(self.player.position[0]-200, self.player.position[1])
-            
-
-    def on_key_press(self, k, _):
-        Astronaut.KEYS_PRESSED[k] = 1
-        if Astronaut.KEYS_PRESSED[key.SPACE]:
-            if Bullet.BULLET_INDEX == 2:
-                Bullet.BULLET_INDEX = 0
-            else:
-                Bullet.BULLET_INDEX += 1
-        
-        if Astronaut.KEYS_PRESSED[key.UP]:
-            Astronaut.JUMP = True
-
+            self.create_player()
 
     def on_key_press(self, k, _):
         pressed = Astronaut.KEYS_PRESSED
@@ -346,15 +342,19 @@ class GameLayer(cocos.layer.ScrollableLayer):
                 Bullet.BULLET_INDEX = 0
             else:
                 Bullet.BULLET_INDEX += 1
-        if pressed[key.LEFT]:
+        self.hud.update_bullet()
+
+        if pressed[key.A]:
             self.player.update_animation('run_L')
             self.direction = 1
+            #Astronaut.JUMP = False
         
-        if pressed[key.RIGHT]:
+        if pressed[key.D]:
             self.player.update_animation('run_R')
             self.direction = 0
+            #Astronaut.JUMP = False
         
-        if pressed[key.UP]:
+        if pressed[key.W]:
             Astronaut.JUMP = True
             if self.direction == 1:
                 self.player.update_animation('jump_L')
@@ -365,6 +365,7 @@ class GameLayer(cocos.layer.ScrollableLayer):
     def on_key_release(self, k, _):
         Astronaut.KEYS_PRESSED[k] = 0
         self.player.update_animation('idle')
+        #Astronaut.JUMP = False
 
     def on_mouse_press(self, x, y, buttons, mod):
         self.bullet = Bullet(x, y, self.player.position)
@@ -387,9 +388,9 @@ class GameLayer(cocos.layer.ScrollableLayer):
         self.bg.set_view(0, 0, self.bg.px_width, self.bg.px_height)
         self.add(self.bg)
 
-    def create_player(self, player_x, player_y):
+    def create_player(self):
         mapcollider = mapcolliders.TmxObjectMapCollider()
-        mapcollider.on_bump_handler = mapcollider.on_bump_slide
+        mapcollider.on_bump_handler = mapcollider.on_bump_bounce
         collision_handler = mapcolliders.make_collision_handler(mapcollider, self.colliders)
 
         animation_image = pyglet.image.load('image/Objects/character_idle.png')
@@ -412,6 +413,16 @@ class GameLayer(cocos.layer.ScrollableLayer):
         image_grid = pyglet.image.ImageGrid(animation_image, 1, 11, item_width=146, item_height=180)
         jump_R = pyglet.image.Animation.from_image_sequence(image_grid[::-1], 0.1, loop=True)
 
+        if self.level == 1:
+            player_x = 480
+            player_y = 150
+        elif self.level == 2:
+            player_x = 150
+            player_y = 550
+        else:
+            player_x = 75
+            player_y = 350
+
         self.player = Astronaut(idle, run_L, run_R, jump_L, jump_R, player_x, player_y, collision_handler, self.level)
         self.add(self.player)
         self.hud.update_lives(self.lives)
@@ -422,26 +433,26 @@ class GameLayer(cocos.layer.ScrollableLayer):
         self.green_alien = 'image/Objects/alien_green.png'
         self.purple_alien = 'image/Objects/alien_purple.png'
         if self.level == 1: 
-            alien_list = [[self.purple_alien, 32, 416, 0.05, 160, 416], [self.red_alien, 672, 448, 1, 896, 448],\
-            [self.purple_alien, 768, 224, 0.05, 896, 224], [self.ufo, 992, 512, 1, 1120, 512],\
-            [self.ufo, 1088, 320, 1, 1248, 320], [self.purple_alien, 1184, 128, 0.05, 1344, 128],\
+            alien_list = [[self.purple_alien, 32, 416, 0.05, 160, 416], [self.purple_alien, 672, 448, 0.05, 896, 448],\
+            [self.purple_alien, 768, 224, 0.05, 896, 224], [self.purple_alien, 992, 512, 0.05, 1120, 512],\
+            [self.purple_alien, 1088, 320, 0.05, 1248, 320], [self.purple_alien, 1184, 128, 0.05, 1344, 128],\
             [self.purple_alien, 1664, 224, 0.05, 1760, 224], [self.purple_alien, 2080, 160, 0.05, 2304, 160],\
             [self.purple_alien, 2016, 448, 0.05, 2208, 448], [self.purple_alien, 2496, 320, 0.05, 2848, 320],\
             [self.purple_alien, 3040, 320, 0.05, 3104, 320], [self.purple_alien, 2496, 96, 0.05, 2592, 96]]
         elif self.level == 2:
-            alien_list = [[self.purple_alien, 32, 32, 0.05, 448, 32], [self.ufo, 448, 32, 1, 768, 32],
-            [self.purple_alien, 1120, 192, 0.05, 1280, 192], [self.purple_alien, 1344, 288, 0.05, 1536, 288],
+            alien_list = [[self.purple_alien, 32, 32, 0.05, 448, 32], [self.red_alien, 448, 32, 0.05, 768, 32],
+            [self.red_alien, 1120, 192, 0.05, 1280, 192], [self.red_alien, 1344, 288, 0.05, 1536, 288],
             [self.purple_alien, 1856, 96, 0.05, 2048, 96], [self.purple_alien, 2112, 192, 0.05, 2272, 192],
-            [self.purple_alien, 1568, 32, 0.05, 1824, 32], [self.purple_alien, 2080, 32, 0.05, 2464, 32], 
+            [self.purple_alien, 1568, 32, 0.05, 1824, 32], [self.red_alien, 2080, 32, 0.05, 2464, 32], 
             [self.purple_alien, 2658, 32, 0.05, 3136, 32], [self.purple_alien, 2752, 320, 0.05, 2880, 320]]
         else:
-            alien_list = [[self.purple_alien, 32, 448, 0.05, 416, 448], [self.ufo, 32, 224, 1, 96, 224],
-            [self.purple_alien, 256, 224, 0.05, 736, 224], [self.purple_alien, 576, 448, 0.05, 928, 448],
+            alien_list = [ [self.purple_alien, 32, 448, 0.05, 96, 224], #[self.green_alien, 32, 224, 0.05, 416, 448],
+            [self.red_alien, 256, 224, 0.05, 736, 224], [self.red_alien, 576, 448, 0.05, 928, 448],
             [self.purple_alien, 928, 448, 0.05, 1312, 448], [self.purple_alien, 960, 224, 0.05, 1152, 224],
-            [self.purple_alien, 1312, 224, 0.05, 1888, 224], [self.purple_alien, 2144, 224, 0.05, 2304, 224],
-            [self.purple_alien, 2656, 224, 0.05, 2944, 224], [self.purple_alien, 3072, 224, 0.05, 3136, 224],
-            [self.purple_alien, 1504, 448, 0.05, 1632, 448], [self.purple_alien, 1760, 448, 0.05, 2048, 448],
-            [self.purple_alien, 2208, 448, 0.05, 2496, 448], [self.purple_alien, 2720, 448, 0.05, 3008, 448]]
+            [self.green_alien, 1312, 224, 0.05, 1888, 224], [self.green_alien, 2144, 224, 0.05, 2304, 224],
+            [self.purple_alien, 2656, 224, 0.05, 2944, 224], [self.red_alien, 3072, 224, 0.05, 3136, 224],
+            [self.green_alien, 1504, 448, 0.05, 1632, 448], [self.purple_alien, 1760, 448, 0.05, 2048, 448],
+            [self.green_alien, 2208, 448, 0.05, 2496, 448], [self.green_alien, 2720, 448, 0.05, 3008, 448]]
         self.alien_group = []
         for i, alien in enumerate(alien_list):
             self.alien_group.append(Alien(alien))
@@ -451,9 +462,9 @@ class GameLayer(cocos.layer.ScrollableLayer):
         if self.level == 1:
             key_list = [[1472, 458], [1696, 234], [2560, 106]]
         elif self.level == 2:
-            key_list = [[1472, 458], [1472, 458], [1472, 458]]
+            key_list = [[615, 140], [1472, 458], [2976, 50]]
         else:
-            key_list = [[1472, 458], [1472, 458], [1472, 458]]
+            key_list = [[3150, 460], [1088, 465], [2240, 240]]
         self.key_list = []
         for i, key in enumerate(key_list):
             self.key_list.append(Key(key))
@@ -461,6 +472,9 @@ class GameLayer(cocos.layer.ScrollableLayer):
 
 
     def update(self, dt):
+        '''if random.random() < 0.1:
+            self.alien_shoot()'''
+
         for alien in self.alien_group:            
             if self.coll_manager.they_collide(self.player, alien):
                 print("COLLIDE")
@@ -470,13 +484,15 @@ class GameLayer(cocos.layer.ScrollableLayer):
             for bullet in self.bullet_list:
                 if len(self.bullet_list) >= 1 and self.coll_manager.they_collide(bullet, alien):
                     print("SHOT")
-                    if (alien.tag == 'image/Objects/alien_red.png' and bullet.tag == 1) or (alien.tag == 'image/Objects/alien_purple.png' and bullet.tag == 2):
+                    if (alien.tag == 'image/Objects/alien_red.png' and bullet.tag == 1) or (alien.tag == 'image/Objects/alien_purple.png' and bullet.tag == 0)\
+                        or (alien.tag == 'image/Objects/alien_green.png' and bullet.tag == 2):
                         self.coin = alien.on_exit()
                         self.add(self.coin)
                         self.coin_group.append(self.coin)
                         self.is_coin = 1
-                        alien.kill()
-                        self.alien_group.remove(alien)
+                        if alien in self.alien_group:
+                            alien.kill()
+                            self.alien_group.remove(alien)
                         self.bullet_list.remove(bullet)
                         self.update_score(20)
                         self.alien_hit_sound.play()
@@ -498,77 +514,162 @@ class GameLayer(cocos.layer.ScrollableLayer):
                 self.key_list.remove(key)
                 self.keyN += 1
                 self.update_key(self.keyN)
+
+        for alien_bullet in self.alien_shoot_list:
+            if len(self.alien_shoot_list) > 0:
+                if self.coll_manager.they_collide(self.player, alien_bullet):
+                    self.player.kill()
+                    self.respawn_player()
+                    self.alien_shoot_list.remove(alien_bullet)
+                elif alien_bullet.exit == True:
+                    self.alien_shoot_list.remove(alien_bullet)
         
         if self.coll_manager.they_collide(self.player, self.door) and self.keyN == 3:
             self.next_level_sound.play()
             self.add_new_scene()
 
     def add_new_scene(self):
-        print(self.level)
-        if self.level == 1:
-            scroller.remove(self)
-            level_2 = GameLayer(hud_layer, 900, 640, 2, 150, 150, self.score)
-            scroller.add(level_2) 
-            #level_1.stop()
-        elif self.level == 2:
-            scroller.remove(self)
-            level_3 = GameLayer(hud_layer, 900, 640, 3, 150, 150, self.score)
-            scroller.add(level_3)
+        if Restart.RESTARTED == False:
+            if self.level == 1:
+                #level_2 = GameLayer(hud_layer, 900, 640, 2, self.score)
+                self.lives = 3
+                self.keyN = 0
+                self.kill()
+                scroller.add(level_2) 
+                HUD.LEVEL += 1
+                self.update_level()
+                self.update_key(-1)
+                self.hud.update_lives(self.lives)
+                #level_1.stop()
+            elif self.level == 2:
+                self.lives = 3
+                self.keyN = 0
+                #level_3 = GameLayer(hud_layer, 900, 640, 3, self.score)
+                self.kill()
+                scroller.add(level_3)
+                HUD.LEVEL += 1
+                self.update_level()
+                self.update_key(-1)
+                self.hud.update_lives(self.lives)
+            else:
+                self.kill()
+                main_scene.add(restart_menu_win)
+                BGM.stop()
+                self.GameClear_sound.play()
         else:
-            scroller.remove(self)
-            main_scene.add(restart_menu_win)
+            if self.level == 1:
+                #level_2 = GameLayer(hud_layer, 900, 640, 2, self.score)
+                self.lives = 3
+                self.keyN = 0
+                self.kill()
+                scroller.add(Restart.level_2) 
+                HUD.LEVEL += 1
+                self.update_level()
+                self.update_key(-1)
+                self.hud.update_lives(self.lives)
+                #level_1.stop()
+            elif self.level == 2:
+                self.lives = 3
+                self.keyN = 0
+                #level_3 = GameLayer(hud_layer, 900, 640, 3, self.score)
+                self.kill()
+                scroller.add(Restart.level_3)
+                HUD.LEVEL += 1
+                self.update_level()
+                self.update_key(-1)
+                self.hud.update_lives(self.lives)
+            else:
+                self.kill()
+                main_scene.add(restart_menu_win)
+                BGM.stop()
+                self.GameClear_sound.play()
 
 
 class HUD(cocos.layer.Layer):
+    LEVEL = 1
+    SCORE = 0
     RESTART_MENU = None
     IS_OVER = 1
 
     def __init__(self):
         super(HUD, self).__init__()
         w, h = cocos.director.director.get_window_size()
-        self.score_text = cocos.text.Label('', font_size=18)
+        self.score_text = cocos.text.Label('', font_size=18, font_name = 'Arial Black')
         self.score_text.position = (20, h - 80)
         #self.key_text = cocos.text.Label('', font_size=18)
         #self.key_text.position = (20, 40)
         #self.lives_text = cocos.text.Label('', font_size=18)
         #self.lives_text.position = (w - 100, h - 40)
-        self.level_text = cocos.text.Label('', font_size=18)
+        self.level_text = cocos.text.Label('', font_size=18, font_name = 'Arial Black')
         self.level_text.position = (20, h - 55)
         self.add(self.score_text)
         #self.add(self.lives_text)
         self.add(self.level_text)
         #self.add(self.key_text)
+        self.update_bullet()
 
-    def update_score(self, score):
-        self.score_text.element.text = 'Score: %s' % score
-
-    def update_key(self, key):
-        #self.key_text.element.text = 'Key: %s/3' % key
-        self.key_1 = cocos.sprite.Sprite('image/Objects/key.png', scale=0.023, position=(20, 49), rotation=-90)
-        self.key_2 = cocos.sprite.Sprite('image/Objects/key.png', scale=0.023, position=(40, 49), rotation=-90)
-        self.key_3 = cocos.sprite.Sprite('image/Objects/key.png', scale=0.023, position=(60, 49), rotation=-90)
-        self.key_blanck_1 = cocos.sprite.Sprite('image/Objects/key_blanck.png', scale=0.023, position=(20, 49), rotation=-90)
-        self.key_blanck_2 = cocos.sprite.Sprite('image/Objects/key_blanck.png', scale=0.023, position=(40, 49), rotation=-90)
-        self.key_blanck_3 = cocos.sprite.Sprite('image/Objects/key_blanck.png', scale=0.023, position=(60, 49), rotation=-90)
-        
-        if key == 0:
-            self.add(self.key_blanck_1); self.add(self.key_blanck_2); self.add(self.key_blanck_3)
-        elif key == 1:
-            self.add(self.key_1)
-        elif key == 2:
-            self.add(self.key_2)
-        else:
-            self.add(self.key_3)
-
-    def update_lives(self, lives):
-        #self.lives_text.element.text = 'Lives: %s' % lives
         self.lives_1 = cocos.sprite.Sprite('image/Objects/full_heart.png', scale=0.015, position=(820, 590))
         self.lives_2 = cocos.sprite.Sprite('image/Objects/full_heart.png', scale=0.015, position=(850, 590))
         self.lives_3 = cocos.sprite.Sprite('image/Objects/full_heart.png', scale=0.015, position=(880, 590))
         self.lives_blank_1 = cocos.sprite.Sprite('image/Objects/empty_heart.png', scale=0.015, position=(880, 590))
         self.lives_blank_2 = cocos.sprite.Sprite('image/Objects/empty_heart.png', scale=0.015, position=(850, 590))
         self.lives_blank_3 = cocos.sprite.Sprite('image/Objects/empty_heart.png', scale=0.015, position=(820, 590))
-        
+
+        self.key_1 = cocos.sprite.Sprite('image/Objects/hud_keyYellow.png', scale=0.5, position=(50, 49), rotation=-90)
+        self.key_2 = cocos.sprite.Sprite('image/Objects/hud_keyYellow.png', scale=0.5, position=(70, 49), rotation=-90)
+        self.key_3 = cocos.sprite.Sprite('image/Objects/hud_keyYellow.png', scale=0.5, position=(90, 49), rotation=-90)
+        self.key_blanck_1 = cocos.sprite.Sprite('image/Objects/hud_keyYellow_disabled.png', scale=0.5, position=(50, 49), rotation=-90)
+        self.key_blanck_2 = cocos.sprite.Sprite('image/Objects/hud_keyYellow_disabled.png', scale=0.5, position=(70, 49), rotation=-90)
+        self.key_blanck_3 = cocos.sprite.Sprite('image/Objects/hud_keyYellow_disabled.png', scale=0.5, position=(90, 49), rotation=-90)
+    
+    def update_bullet(self):
+        self.red = cocos.sprite.Sprite('image/Objects/red_bullet.png', position=(830, 20), scale=0.8)
+        self.green = cocos.sprite.Sprite('image/Objects/green_bullet.png', position=(880, 20), scale=0.8)
+        self.purple = cocos.sprite.Sprite('image/Objects/purple_bullet.png', position=(855, 15), scale=1.4)
+        self.add(self.red); self.add(self.green); self.add(self.purple)
+    
+        if Bullet.BULLET_INDEX == 0:
+            self.green.position = (880, 20)
+            self.green.scale = 0.8
+            self.red.position=(830, 20)
+            self.red.scale=0.8
+            self.purple.position=(855, 15)
+            self.purple.scale=1.4
+        elif Bullet.BULLET_INDEX == 1:
+            self.purple.position = (880, 20)
+            self.purple.scale = 0.8
+            self.green.position=(830, 20)
+            self.green.scale=0.8
+            self.red.position=(855, 15)
+            self.red.scale=1.4
+        else:
+            self.red.position = (880, 20)
+            self.red.scale = 0.8
+            self.purple.position=(830, 20)
+            self.purple.scale=0.8
+            self.green.position=(855, 15)
+            self.green.scale=1.4
+
+    def update_score(self):
+        self.score_text.element.text = 'Score: %s' % HUD.SCORE
+
+    def update_key(self, key):        
+        if key == 0:
+            self.add(self.key_blanck_1); self.add(self.key_blanck_2); self.add(self.key_blanck_3)
+            
+        elif key == 1:
+            self.add(self.key_1)
+        elif key == 2:
+            self.add(self.key_2)
+        elif key == 3:
+            self.add(self.key_3)
+        else: 
+            self.remove(self.key_1)
+            self.remove(self.key_2)
+            self.remove(self.key_3)
+
+
+    def update_lives(self, lives):        
         if lives == 3:
             self.add(self.lives_1); self.add(self.lives_2); self.add(self.lives_3)
         elif lives == 2:
@@ -578,8 +679,8 @@ class HUD(cocos.layer.Layer):
         else:
             self.add(self.lives_blank_3)
 
-    def update_level(self, level):
-        self.level_text.element.text = 'Level: %s' % level
+    def update_level(self):
+        self.level_text.element.text = 'Level: %s' % HUD.LEVEL
 
 
 
@@ -593,7 +694,9 @@ if __name__ == '__main__':
     restart_menu_lose = Restart(0)
     restart_menu_win = Restart(1)    
     hud_layer = HUD()
-    level_1 = GameLayer(hud_layer, 900, 640, 1, 480, 150, 0)
+    level_1 = GameLayer(hud_layer, 900, 640, 1)
+    level_2 = GameLayer(hud_layer, 900, 640, 2)
+    level_3 = GameLayer(hud_layer, 900, 640, 3)
     scroller.add(level_1)
     main_scene.add(menu)
     
@@ -601,7 +704,4 @@ if __name__ == '__main__':
     BGM.play(-1)
     cocos.director.director.run(main_scene)
 
-#레벨 전환 화면
-#alien 공격 - 레벨 2에서 몇 개만, 레벨 3는 player 좌표값으로 move로 구현
-#key 배치
-#점프 조정
+    #alien_shoot
